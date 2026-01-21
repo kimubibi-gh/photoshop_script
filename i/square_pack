@@ -1,0 +1,42 @@
+#target photoshop
+#targetengine square_pack_engine
+app.displayDialogs = DialogModes.NO;
+
+(function(){
+  // 固定キャンバス
+  var CANVAS_W = 1000, CANVAS_H = 1000, DPI = 72;
+  // 読み込み対象（必要なら heic/raw を追記）
+  var EXT_RE = /\.(jpg|jpeg|png|tif|tiff|psd)$/i;
+
+  // PowerShell経由なら IN_DIR or 環境変数 PS_IN_DIR から受け取る
+  var inPath = (typeof IN_DIR !== "undefined" && IN_DIR) ? IN_DIR : $.getenv("PS_IN_DIR");
+  if (!inPath) { alert("IN_DIR not set."); return; }
+
+  var folder = new Folder(inPath);
+  if (!folder.exists) { alert("Folder not found: " + inPath); return; }
+
+  var files = folder.getFiles(function(f){ return f instanceof File && EXT_RE.test(f.name); });
+  if (!files || files.length === 0) { alert("No images."); return; }
+
+  // 新規ドキュメント（透明背景）
+  var dst = app.documents.add(UnitValue(CANVAS_W,"px"), UnitValue(CANVAS_H,"px"),
+                              DPI, "layers_"+folder.name, NewDocumentMode.RGB, DocumentFill.TRANSPARENT);
+
+  // Action Managerで「埋め込み配置」（ダイアログ無し）
+  function placeEmbedded(fileObj){
+    var d = new ActionDescriptor();
+    d.putPath(charIDToTypeID('null'), fileObj);
+    executeAction(stringIDToTypeID('placeEvent'), d, DialogModes.NO);
+  }
+
+  // 1枚ずつ＝1レイヤー。中央寄せ・縮小等は一切しない
+  for (var i=0; i<files.length; i++) {
+    try {
+      app.activeDocument = dst;
+      placeEmbedded(files[i]);                    // スマートオブジェクト1枚作成
+      dst.activeLayer.name = files[i].name.replace(/\.[^\.]+$/, "");
+    } catch (e) { /* 問題ファイルはスキップ */ }
+  }
+
+  try { dst.fitOnScreen(); } catch(_) {}
+})();
